@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#FFFFFF" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="HRES Simulator" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="application-name" content="HRES Optimizer" />
+  <title>Hybrid Solar PV–Biogas & Storage Microgrid Simulator</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="mobile-app-shell">
+    
+    <!-- 1. COMPACT APP HEADER -->
+    <header class="app-header">
+      <div class="header-main-row">
+        <div class="brand-box">
+          <div class="brand-icon">⚡</div>
+          <div class="brand-titles">
+            <h1 class="brand-heading">HRES Microgrid Simulator</h1>
+            <div class="brand-sub">
+              <span>Debre Markos Feeder</span>
+              <span class="author-credit">• by Franz Xyrlo Tobias, PEE</span>
+            </div>
+          </div>
+        </div>
+        <div class="header-action-group">
+          <button id="btn-sound" class="btn-icon" title="Toggle Sound FX">🔊</button>
+          <button id="btn-info" class="btn-icon" title="View Mathematical Model & System Specs">ℹ️</button>
+          <button id="btn-reset" class="btn-icon btn-reset" title="Reset to Nominal State">↺</button>
+        </div>
+      </div>
+
+      <!-- 2. OPTIMIZATION ALGORITHM PICKER (Multi-Objective Pareto Cases) -->
+      <div class="algo-bar">
+        <button class="algo-btn active" data-algo="NSWOA">
+          <span class="algo-tag">🐋 NSWOA</span>
+          <span class="algo-badge">Optimal</span>
+        </button>
+        <button class="algo-btn" data-algo="MOGWO">
+          <span class="algo-tag">🐺 MOGWO</span>
+        </button>
+        <button class="algo-btn" data-algo="MOPSO">
+          <span class="algo-tag">🦅 MOPSO</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- 3. HERO TELEMETRY READOUT (ZERO-FLICKER RIGID COLUMN) -->
+    <section class="card hero-telemetry-card">
+      <div class="telemetry-top">
+        <div class="mode-pill-wrap">
+          <span id="badge-dispatch-mode" class="badge-mode mode-surplus">MODE I • SOLAR SURPLUS</span>
+          <div class="badge-status-row">
+            <span id="badge-grid-status" class="badge-status">GRID: EXPORTING +2,264 kW</span>
+          </div>
+        </div>
+        <div class="power-balance-wrap">
+          <span class="balance-label">NET MICROGRID BALANCE</span>
+          <div class="balance-number-row">
+            <span id="val-net-power" class="balance-val text-green">+2,665 kW</span>
+            <span id="val-net-label" class="balance-sub">Clean Surplus</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Multi-Objective Pareto KPI Strip (Philippine Peso ₱) -->
+      <div class="kpi-strip">
+        <div class="kpi-box">
+          <span class="kpi-label">TOTAL NPC (PHP)</span>
+          <span id="kpi-npc" class="kpi-val text-blue">₱430.3M</span>
+          <span id="kpi-lcoe" class="kpi-sub">LCOE ₱2.84/kWh</span>
+        </div>
+        <div class="kpi-box">
+          <span class="kpi-label">RELIABILITY</span>
+          <span id="kpi-lpsp" class="kpi-val text-green">0.85%</span>
+          <span id="kpi-rel-sub" class="kpi-sub">99.15% Coverage</span>
+        </div>
+        <div class="kpi-box">
+          <span class="kpi-label">CO₂ OFFSET</span>
+          <span id="kpi-co2" class="kpi-val text-emerald">-7.37M kg</span>
+          <span id="kpi-ghg-sub" class="kpi-sub">45.7% Clean Cut</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4. VISUAL POWER FLOW & ENERGY PRODUCTION VS LOAD PROFILE -->
+    <section class="card canvas-card">
+      <div class="canvas-header">
+        <div class="canvas-title-wrap">
+          <span id="canvas-section-title" class="canvas-title">⚡ Power Flow & Storage Buffer</span>
+        </div>
+        <div class="canvas-ctrls">
+          <button id="btn-toggle-view" class="btn-xs-tab active">Flow Map</button>
+          <button id="btn-toggle-profile" class="btn-xs-tab">Profile vs Load</button>
+          <button id="btn-toggle-trend" class="btn-xs-tab">Live Trend</button>
+        </div>
+      </div>
+
+      <!-- Absolute-bound wrapper eliminates canvas reflow loops -->
+      <div class="canvas-wrapper">
+        <canvas id="flowCanvas"></canvas>
+      </div>
+
+      <!-- Live Dual Storage SOC Gauges -->
+      <div class="storage-gauge-row">
+        <div class="gauge-item">
+          <div class="gauge-lbl-wrap">
+            <span>💧 PHES Reservoir</span>
+            <strong id="lbl-gauge-phes">76.5% (20,500 m³)</strong>
+          </div>
+          <div class="gauge-track">
+            <div id="bar-gauge-phes" class="gauge-fill gauge-phes" style="width: 76.5%;"></div>
+          </div>
+        </div>
+        <div class="gauge-item">
+          <div class="gauge-lbl-wrap">
+            <span>🧲 SMES Buffer</span>
+            <strong id="lbl-gauge-smes">85.0% (121 kWh)</strong>
+          </div>
+          <div class="gauge-track">
+            <div id="bar-gauge-smes" class="gauge-fill gauge-smes" style="width: 85.0%;"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick Telemetry Chips -->
+      <div class="gen-chips-grid">
+        <div class="gen-chip chip-pv">
+          <span class="chip-icon">☀️ PV</span>
+          <span id="chip-pv-val" class="chip-val">3,850 kW</span>
+        </div>
+        <div class="gen-chip chip-biogas">
+          <span class="chip-icon">🌾 Biogas</span>
+          <span id="chip-biogas-val" class="chip-val">0 kW</span>
+        </div>
+        <div class="gen-chip chip-phes">
+          <span class="chip-icon">💧 PHES</span>
+          <span id="chip-phes-val" class="chip-val">-401 kW</span>
+        </div>
+        <div class="gen-chip chip-smes">
+          <span class="chip-icon">🧲 SMES</span>
+          <span id="chip-smes-val" class="chip-val">0 kW</span>
+        </div>
+        <div class="gen-chip chip-grid">
+          <span class="chip-icon">🌐 Grid</span>
+          <span id="chip-grid-val" class="chip-val">+2,264 kW</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5. CAPACITY SIZING & OPTIMIZATION CONSOLE (NEW FEATURE) -->
+    <section class="card sizing-console-card">
+      <div class="sizing-header">
+        <div class="sizing-title-wrap">
+          <span class="sizing-title">⚙️ Component Capacities</span>
+        </div>
+        <div class="sizing-actions">
+          <button id="btn-optimize-size" class="btn-optimize-size" title="Run Metaheuristic Pareto Optimization (NSWOA Optimal)">
+            🎯 OPTIMIZE SIZE
+          </button>
+          <button id="btn-toggle-sizing" class="btn-toggle-drawer" title="Toggle Custom Capacity Sliders">
+            Adjust ▾
+          </button>
+        </div>
+      </div>
+
+      <!-- Expandable/Adjustable Capacity Sliders -->
+      <div id="sizing-slider-grid" class="sizing-grid">
+        <div class="sizing-item">
+          <div class="sizing-item-lbl">
+            <span>☀️ Solar PV</span>
+            <strong id="lbl-cap-pv">5,495 kWp</strong>
+          </div>
+          <input type="range" id="slider-cap-pv" min="1000" max="10000" value="5495" step="50" class="mini-slider" />
+        </div>
+        <div class="sizing-item">
+          <div class="sizing-item-lbl">
+            <span>🌾 Biogas Gen</span>
+            <strong id="lbl-cap-biogas">860 kW</strong>
+          </div>
+          <input type="range" id="slider-cap-biogas" min="200" max="2500" value="860" step="20" class="mini-slider" />
+        </div>
+        <div class="sizing-item">
+          <div class="sizing-item-lbl">
+            <span>💧 PHES Hydro</span>
+            <strong id="lbl-cap-phes">401 kW</strong>
+          </div>
+          <input type="range" id="slider-cap-phes" min="100" max="1500" value="401" step="20" class="mini-slider" />
+        </div>
+        <div class="sizing-item">
+          <div class="sizing-item-lbl">
+            <span>🧲 SMES Buffer</span>
+            <strong id="lbl-cap-smes">142 kWh</strong>
+          </div>
+          <input type="range" id="slider-cap-smes" min="50" max="500" value="142" step="5" class="mini-slider" />
+        </div>
+      </div>
+    </section>
+
+    <!-- 6. INTERACTIVE OPERATING CONTROLS & DEDICATED SIMULATE BUTTON -->
+    <section class="card controls-card">
+      <div class="slider-row">
+        <div class="slider-header">
+          <span class="slider-title">☀️ Solar Irradiance: <strong id="lbl-irradiance">850</strong> W/m²</span>
+          <div class="quick-preset-pills">
+            <button class="pill-btn" data-solar="0">Night</button>
+            <button class="pill-btn" data-solar="450">Cloud</button>
+            <button class="pill-btn active-pill" data-solar="850">Day</button>
+            <button class="pill-btn" data-solar="1196">Peak</button>
+          </div>
+        </div>
+        <input type="range" id="slider-irradiance" min="0" max="1196" value="850" step="10" class="mobile-slider slider-sun" />
+      </div>
+
+      <div class="slider-row">
+        <div class="slider-header">
+          <span class="slider-title">🏢 Campus Load Demand: <strong id="lbl-load">1,185</strong> kW</span>
+          <div class="quick-preset-pills">
+            <button class="pill-btn" data-load="663">Min</button>
+            <button class="pill-btn active-pill" data-load="1185">Avg</button>
+            <button class="pill-btn" data-load="1707">Peak</button>
+          </div>
+        </div>
+        <input type="range" id="slider-load" min="600" max="2200" value="1185" step="15" class="mobile-slider slider-load" />
+      </div>
+
+      <!-- Action Buttons Row with Prominent SIMULATE Button -->
+      <div class="action-btn-row">
+        <button id="btn-simulate" class="action-btn btn-simulate" title="Toggle Continuous 24h Dynamic Physics Simulation">
+          ⚡ SIMULATE
+        </button>
+        <button id="btn-cloud-shock" class="action-btn btn-warning" title="Test sub-second SMES fast response (<50ms) on solar drop">
+          ⛅ Cloud
+        </button>
+        <button id="btn-night-mode" class="action-btn btn-primary" title="Trigger night condition (Biogas + Hydro dispatch)">
+          🌙 Night
+        </button>
+        <button id="btn-island-mode" class="action-btn btn-island" title="Toggle Islanded standalone microgrid mode vs Grid-connected">
+          🔌 Grid: ON
+        </button>
+      </div>
+    </section>
+
+    <!-- 7. REAL-TIME SCADA & DISPATCH EVENT LOG -->
+    <section class="card event-log-card">
+      <div class="log-header">
+        <div class="log-title-wrap">
+          <span class="footer-dot dot-live"></span>
+          <span class="log-title">SCADA Event Log</span>
+          <span id="log-counter" class="log-counter">1 Events</span>
+        </div>
+        <div class="log-ctrls">
+          <button class="log-filter-btn active" data-filter="all">All</button>
+          <button class="log-filter-btn" data-filter="dispatch">Dispatch</button>
+          <button class="log-filter-btn" data-filter="storage">Storage</button>
+          <button class="log-filter-btn" data-filter="grid">Grid</button>
+          <button id="btn-clear-log" class="log-clear-btn" title="Clear log entries">✕</button>
+        </div>
+      </div>
+      <div id="event-log-terminal" class="log-terminal">
+        <!-- Live entries populated dynamically -->
+      </div>
+    </section>
+
+    <!-- 8. BOTTOM STATUS FOOTER -->
+    <footer class="app-footer">
+      <div class="footer-status-row">
+        <span class="footer-dot dot-live"></span>
+        <span id="lbl-sim-status" class="footer-text">Simulation Ready • 60 FPS • Debre Markos Campus (10.22°N, 37.44°E)</span>
+      </div>
+    </footer>
+
+    <!-- 9. MODAL: MATHEMATICAL FORMULATIONS & DETAILED PAPER SPECIFICATIONS (PHP CURRENCY) -->
+    <div id="modal-info" class="modal-backdrop hidden">
+      <div class="modal-dialog">
+        <div class="modal-header">
+          <div class="modal-title-group">
+            <h2 class="modal-heading">📐 System Models & Multi-Objective Cases</h2>
+            <span class="modal-sub">Based on MDPI Sustainability 2023, 15, 8264 • Currency: Philippine Peso (PHP, ₱)</span>
+          </div>
+          <button id="btn-close-modal" class="modal-close">&times;</button>
+        </div>
+        <div class="modal-content">
+          <div class="info-section">
+            <h3 class="section-title">🏢 Study Area & Overview</h3>
+            <p class="section-desc">
+              Debre Markos distribution feeder, Ethiopia (10.22°N, 37.44°E). Supplying Debre Markos University laboratories, classrooms, dormitories, and agricultural pumps. Modeled with full financial conversions in Philippine Peso (₱61.50 = €1.00) for local utility and microgrid feasibility.
+            </p>
+          </div>
+
+          <div class="info-section">
+            <h3 class="section-title">📊 Multi-Objective Optimization Results</h3>
+            <div class="table-wrap">
+              <table class="specs-table">
+                <thead>
+                  <tr>
+                    <th>Parameter</th>
+                    <th class="col-highlight">NSWOA</th>
+                    <th>MOGWO</th>
+                    <th>MOPSO</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>Solar PV Capacity</td>
+                    <td class="col-highlight"><strong>5,495.4 kW</strong></td>
+                    <td>5,228.6 kW</td>
+                    <td>5,464.3 kW</td>
+                  </tr>
+                  <tr>
+                    <td>Biogas Gen Rating</td>
+                    <td class="col-highlight"><strong>860.3 kW</strong></td>
+                    <td>936.9 kW</td>
+                    <td>941.6 kW</td>
+                  </tr>
+                  <tr>
+                    <td>PHES Pump/Turbine</td>
+                    <td class="col-highlight"><strong>400.7 kW</strong></td>
+                    <td>379.0 kW</td>
+                    <td>362.9 kW</td>
+                  </tr>
+                  <tr>
+                    <td>Upper Reservoir</td>
+                    <td class="col-highlight"><strong>26,798 m³</strong></td>
+                    <td>25,297 m³</td>
+                    <td>24,996 m³</td>
+                  </tr>
+                  <tr>
+                    <td>SMES Capacity</td>
+                    <td class="col-highlight"><strong>142.3 kWh</strong></td>
+                    <td>142.3 kWh</td>
+                    <td>142.3 kWh</td>
+                  </tr>
+                  <tr>
+                    <td>Total NPC (PHP)</td>
+                    <td class="col-highlight"><strong>₱430.31M (€6.997M)</strong></td>
+                    <td>₱430.99M (€7.008M)</td>
+                    <td>₱431.18M (€7.011M)</td>
+                  </tr>
+                  <tr>
+                    <td>LCOE (PHP/kWh)</td>
+                    <td class="col-highlight"><strong>₱2.842/kWh</strong></td>
+                    <td>₱2.884/kWh</td>
+                    <td>₱2.890/kWh</td>
+                  </tr>
+                  <tr>
+                    <td>COE (PHP/kWh)</td>
+                    <td class="col-highlight"><strong>₱3.266/kWh</strong></td>
+                    <td>₱3.298/kWh</td>
+                    <td>₱3.305/kWh</td>
+                  </tr>
+                  <tr>
+                    <td>LPSP (Loss Prob.)</td>
+                    <td class="col-highlight"><strong>0.0085 (0.85%)</strong></td>
+                    <td>0.0089</td>
+                    <td>0.0092</td>
+                  </tr>
+                  <tr>
+                    <td>LOLE (Loss Expectation)</td>
+                    <td class="col-highlight"><strong>10.61 h/yr</strong></td>
+                    <td>11.50 h/yr</td>
+                    <td>14.20 h/yr</td>
+                  </tr>
+                  <tr>
+                    <td>CO₂ Reduction</td>
+                    <td class="col-highlight"><strong>-7.37M kg/yr</strong></td>
+                    <td>-7.33M kg/yr</td>
+                    <td>-7.33M kg/yr</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="info-section">
+            <h3 class="section-title">⚙️ Mathematical Models (Eq. 1 - 31)</h3>
+            <div class="formula-card">
+              <span class="formula-label">Solar PV Power (Eq. 1-3):</span>
+              <div class="formula-code">P_pv(t) = P_pv,r · (G(t)/1000) · [1 + α_c·(T_amb + 0.0256·G(t) - 25)]</div>
+            </div>
+            <div class="formula-card">
+              <span class="formula-label">Biogas Generator Power (Eq. 4):</span>
+              <div class="formula-code">P_B(t) = (V_B(t) · CV_B · η_B) / (860 · t_B)</div>
+            </div>
+            <div class="formula-card">
+              <span class="formula-label">Pumped Hydro Generation / Pumping (Eq. 6-8):</span>
+              <div class="formula-code">E_gen,PHES = min[ V(t-1)/3600, Q_T ] · η_T · η_P · ρ · g · H_net</div>
+            </div>
+            <div class="formula-card">
+              <span class="formula-label">Fast SMES Superconducting Buffer (Eq. 12-15):</span>
+              <div class="formula-code">E_SMES(t) = 0.5 · L_SMES · I_SMES² (Sub-second transient response)</div>
+            </div>
+            <div class="formula-card">
+              <span class="formula-label">Multi-Objective Pareto Functions (Eq. 29-31):</span>
+              <div class="formula-code">F1 = min{Total NPC (₱)}  |  F2 = min{LPSP}  |  F3 = min{CO₂ Emissions}</div>
+            </div>
+          </div>
+
+          <div class="info-section">
+            <h3 class="section-title">🔄 Operating Dispatch Modes (Section 4.2)</h3>
+            <ul class="modes-list">
+              <li><strong>Mode I (P_pv &gt; P_L):</strong> High solar surplus. SMES charges within milliseconds, PHES pumps water to upper reservoir.</li>
+              <li><strong>Mode II (0 &lt; P_pv &lt; P_L):</strong> PV deficit. SMES absorbs rapid step changes while PHES hydro turbine ramps to meet deficit.</li>
+              <li><strong>Mode III (P_pv &gt; P_L, Storage Full):</strong> Excess energy exported to national grid under feed-in-tariff.</li>
+              <li><strong>Mode IV (P_pv = 0):</strong> Night / zero solar. Biogas generator starts up and pairs with PHES/SMES to supply base load.</li>
+              <li><strong>Mode V (P_gen &lt; P_L):</strong> Storage depleted or extreme peak. Backed up by national distribution grid import.</li>
+            </ul>
+          </div>
+
+          <div class="modal-footer-credit">
+            Developed based on: <em>Agajie et al., "Optimal Design and Mathematical Modeling of Hybrid Solar PV–Biogas Generator with Energy Storage...", Sustainability 2023, 15, 8264.</em><br>
+            Simulator Implementation by <strong>Franz Xyrlo Tobias, PEE</strong>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
